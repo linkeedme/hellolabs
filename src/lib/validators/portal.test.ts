@@ -3,6 +3,7 @@ import {
   portalCaseListSchema,
   portalApproveSchema,
   portalCommentSchema,
+  portalFileUploadSchema,
 } from './portal'
 
 const uuid = '550e8400-e29b-41d4-a716-446655440000'
@@ -70,5 +71,63 @@ describe('portalCommentSchema', () => {
 
   it('rejeita conteudo acima de 5000 caracteres', () => {
     expect(() => portalCommentSchema.parse({ caseId: uuid, content: 'x'.repeat(5001) })).toThrow()
+  })
+})
+
+// ═══════════════════════════════════════════════
+// PORTAL FILE UPLOAD
+// ═══════════════════════════════════════════════
+
+describe('portalFileUploadSchema', () => {
+  it('aceita upload valido', () => {
+    const result = portalFileUploadSchema.parse({
+      caseId: uuid,
+      fileUrl: 'tenant123/case456/1234567890_scan.stl',
+      fileType: 'model',
+      fileName: 'scan.stl',
+      fileSize: 5242880,
+    })
+    expect(result.caseId).toBe(uuid)
+    expect(result.fileUrl).toBe('tenant123/case456/1234567890_scan.stl')
+    expect(result.fileType).toBe('model')
+    expect(result.fileName).toBe('scan.stl')
+    expect(result.fileSize).toBe(5242880)
+  })
+
+  it('aceita upload sem fileSize', () => {
+    const result = portalFileUploadSchema.parse({
+      caseId: uuid,
+      fileUrl: 'tenant123/case456/1234567890_foto.jpg',
+      fileType: 'image',
+      fileName: 'foto.jpg',
+    })
+    expect(result.fileSize).toBeUndefined()
+  })
+
+  it('rejeita caseId invalido', () => {
+    expect(() => portalFileUploadSchema.parse({
+      caseId: 'abc',
+      fileUrl: 'path/to/file',
+      fileType: 'model',
+      fileName: 'scan.stl',
+    })).toThrow()
+  })
+
+  it('rejeita fileUrl vazio', () => {
+    expect(() => portalFileUploadSchema.parse({
+      caseId: uuid,
+      fileUrl: '',
+      fileType: 'model',
+      fileName: 'scan.stl',
+    })).toThrow()
+  })
+
+  it('rejeita fileName acima de 255 caracteres', () => {
+    expect(() => portalFileUploadSchema.parse({
+      caseId: uuid,
+      fileUrl: 'path/to/file',
+      fileType: 'model',
+      fileName: 'x'.repeat(256),
+    })).toThrow()
   })
 })

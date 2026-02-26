@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Plus, Receipt, MoreHorizontal, FileCheck, X, Loader2 } from 'lucide-react'
+import { Plus, Receipt, MoreHorizontal, FileCheck, X, Loader2, Download } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,6 +32,7 @@ import { EmptyState } from '@/components/shared/empty-state'
 import { StatusBadge, getOSStatusBadge } from '@/components/shared/status-badge'
 import { FinancialTabs } from '@/components/financial/financial-tabs'
 import { OrderFormDialog } from '@/components/financial/order-form-dialog'
+import { PdfDownloadButton } from '@/components/shared/pdf-download-button'
 import { trpc } from '@/lib/trpc/client'
 import { formatMoney, formatDate } from '@/lib/utils/format'
 import { useDebounce } from '@/lib/hooks/use-debounce'
@@ -188,6 +189,9 @@ export default function FinancialOrdersPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem asChild>
+                            <PdfDownloadButton type="so" id={so.id} label="Baixar PDF" variant="ghost" size="sm" className="w-full justify-start px-2 py-1.5 h-auto font-normal" />
+                          </DropdownMenuItem>
                           {so.status === 'DRAFT' && (
                             <DropdownMenuItem
                               onClick={() => issueMutation.mutate({ id: so.id })}

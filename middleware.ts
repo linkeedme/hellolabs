@@ -8,27 +8,25 @@ const PUBLIC_ROUTES = [
   '/forgot-password',
   '/reset-password',
   '/invite',
-  '/details',
-  '/finish',
   '/api/webhooks',
   '/api/auth/callback',
 ]
 
-// Rotas que requerem role ADMIN
-const ADMIN_ROUTES = ['/settings', '/team']
+// Rotas de onboarding (requerem auth mas NAO requerem tenant)
+const ONBOARDING_ROUTES = ['/details', '/finish']
 
 function isPublicRoute(path: string): boolean {
   return PUBLIC_ROUTES.some((route) => path.startsWith(route))
 }
 
-function isAdminRoute(path: string): boolean {
-  return ADMIN_ROUTES.some((route) => path.startsWith(route))
+function isOnboardingRoute(path: string): boolean {
+  return ONBOARDING_ROUTES.some((route) => path.startsWith(route))
 }
 
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
 
-  // Skip static files and API routes that handle their own auth
+  // Skip static files
   if (
     path.startsWith('/_next') ||
     path.startsWith('/api/webhooks') ||
@@ -56,6 +54,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl)
   }
 
+  // Onboarding routes: permitir acesso para users autenticados (com ou sem tenant)
+  if (isOnboardingRoute(path)) {
+    return response
+  }
+
   // Rota raiz: redireciona para dashboard
   if (path === '/') {
     return NextResponse.redirect(new URL('/dashboard', request.url))
@@ -66,12 +69,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization)
-     * - favicon.ico, sitemap.xml, robots.txt
-     */
     '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)',
   ],
 }

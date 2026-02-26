@@ -47,14 +47,14 @@ export function KanbanFilters({ filters, onFiltersChange }: KanbanFiltersProps) 
 
       {/* Client */}
       <Select
-        value={filters.clientId ?? ''}
-        onValueChange={(val) => onFiltersChange({ ...filters, clientId: val || undefined })}
+        value={filters.clientId ?? '__all__'}
+        onValueChange={(val) => onFiltersChange({ ...filters, clientId: val === '__all__' ? undefined : val })}
       >
         <SelectTrigger className="w-[160px]">
           <SelectValue placeholder="Cliente" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="">Todos</SelectItem>
+          <SelectItem value="__all__">Todos</SelectItem>
           {clients.map((c) => (
             <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
           ))}
@@ -63,14 +63,14 @@ export function KanbanFilters({ filters, onFiltersChange }: KanbanFiltersProps) 
 
       {/* Priority */}
       <Select
-        value={filters.priority ?? ''}
-        onValueChange={(val) => onFiltersChange({ ...filters, priority: (val || undefined) as CaseKanbanInput['priority'] })}
+        value={filters.priority ?? '__all__'}
+        onValueChange={(val) => onFiltersChange({ ...filters, priority: val === '__all__' ? undefined : val as CaseKanbanInput['priority'] })}
       >
         <SelectTrigger className="w-[130px]">
           <SelectValue placeholder="Prioridade" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="">Todas</SelectItem>
+          <SelectItem value="__all__">Todas</SelectItem>
           <SelectItem value="NORMAL">Normal</SelectItem>
           <SelectItem value="URGENT">Urgente</SelectItem>
           <SelectItem value="CRITICAL">Critico</SelectItem>
@@ -79,14 +79,14 @@ export function KanbanFilters({ filters, onFiltersChange }: KanbanFiltersProps) 
 
       {/* Prosthesis Type */}
       <Select
-        value={filters.prosthesisType ?? ''}
-        onValueChange={(val) => onFiltersChange({ ...filters, prosthesisType: val || undefined })}
+        value={filters.prosthesisType ?? '__all__'}
+        onValueChange={(val) => onFiltersChange({ ...filters, prosthesisType: val === '__all__' ? undefined : val })}
       >
         <SelectTrigger className="w-[160px]">
           <SelectValue placeholder="Tipo" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="">Todos</SelectItem>
+          <SelectItem value="__all__">Todos</SelectItem>
           {PROSTHESIS_TYPES.map((t) => (
             <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
           ))}
@@ -95,14 +95,14 @@ export function KanbanFilters({ filters, onFiltersChange }: KanbanFiltersProps) 
 
       {/* Assigned To */}
       <Select
-        value={filters.assignedTo ?? ''}
-        onValueChange={(val) => onFiltersChange({ ...filters, assignedTo: val || undefined })}
+        value={filters.assignedTo ?? '__all__'}
+        onValueChange={(val) => onFiltersChange({ ...filters, assignedTo: val === '__all__' ? undefined : val })}
       >
         <SelectTrigger className="w-[150px]">
           <SelectValue placeholder="Responsavel" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="">Todos</SelectItem>
+          <SelectItem value="__all__">Todos</SelectItem>
           {members.map((m) => (
             <SelectItem key={m.userId} value={m.userId}>{m.name}</SelectItem>
           ))}

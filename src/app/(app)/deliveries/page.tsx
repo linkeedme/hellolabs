@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Truck, Clock, MapPin, CheckCircle2, AlertCircle, Play, Flag } from 'lucide-react'
+import { Plus, Truck, Clock, MapPin, CheckCircle2, AlertCircle, Play, Flag, Download } from 'lucide-react'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { trpc } from '@/lib/trpc/client'
+import { downloadDeliveryReceiptPdf } from '@/components/shared/pdf-download-button'
+import type { LabInfo } from '@/lib/pdf/lab-header'
 import { StatusBadge, getRouteStatusBadge, getStopStatusBadge } from '@/components/shared/status-badge'
 import { RouteFormDialog } from '@/components/deliveries/route-form-dialog'
 import { StopFormDialog } from '@/components/deliveries/stop-form-dialog'
@@ -23,6 +25,8 @@ export default function DeliveriesPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [stopOpen, setStopOpen] = useState(false)
   const [selectedRouteId, setSelectedRouteId] = useState('')
+
+  const { data: tenant } = trpc.tenant.getCurrent.useQuery()
 
   const { data, isLoading } = trpc.delivery.route.list.useQuery({
     page,
@@ -206,6 +210,44 @@ export default function DeliveriesPage() {
                       <CheckCircle2 className="h-3 w-3" />
                       Concluir Rota
                     </button>
+                  )}
+                  {route.status === 'COMPLETED' && tenant && (
+                    <>
+                      <button
+                        onClick={async () => {
+                          const settings = (tenant.settings ?? {}) as Record<string, unknown>
+                          const lab: LabInfo = {
+                            name: tenant.name,
+                            logoUrl: tenant.logoUrl,
+                            address: (settings.address as string) ?? null,
+                            phone: (settings.phone as string) ?? null,
+                            email: (settings.email as string) ?? null,
+                            cpfCnpj: (settings.cpfCnpj as string) ?? null,
+                          }
+                          try {
+                            await downloadDeliveryReceiptPdf(lab, {
+                              routeDate: route.date,
+                              status: route.status,
+                              driverName: route.driverName,
+                              completedAt: route.completedAt,
+                              stops: route.stops.map((s) => ({
+                                order: s.order,
+                                address: s.address,
+                                notes: s.notes,
+                                status: s.status,
+                              })),
+                            })
+                            toast.success('Comprovante gerado!')
+                          } catch {
+                            toast.error('Erro ao gerar comprovante.')
+                          }
+                        }}
+                        className="text-[11px] text-[#5e81f4] font-medium hover:underline flex items-center gap-1"
+                      >
+                        <Download className="h-3 w-3" />
+                        Comprovante
+                      </button>
+                    </>
                   )}
                 </div>
               </div>

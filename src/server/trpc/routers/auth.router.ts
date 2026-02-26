@@ -18,9 +18,17 @@ export const authRouter = createTRPCRouter({
       z.object({
         labName: z.string().min(2).max(255),
         document: z.string().optional(), // CPF ou CNPJ
+        phone: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      if (!ctx.user) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Registro de usuario incompleto. Tente fazer login novamente.',
+        })
+      }
+
       // Verifica se usuario ja tem tenant
       const existing = await rawDb.tenantUser.findFirst({
         where: { userId: ctx.user.id, role: 'ADMIN' },
@@ -43,6 +51,7 @@ export const authRouter = createTRPCRouter({
           plan: 'SOLO',
           settings: {
             document: input.document || null,
+            phone: input.phone || null,
             workHours: { start: '08:00', end: '18:00' },
             workDays: [1, 2, 3, 4, 5], // seg-sex
             holidays: [],
@@ -71,6 +80,16 @@ export const authRouter = createTRPCRouter({
 
   // Informacoes do usuario logado
   me: protectedProcedure.query(async ({ ctx }) => {
+    // During onboarding the DB user may not exist yet
+    if (!ctx.user) {
+      return {
+        id: ctx.supabaseUser.id,
+        email: ctx.supabaseUser.email || '',
+        name: ctx.supabaseUser.user_metadata?.full_name || '',
+        tenants: [],
+      }
+    }
+
     const tenantUsers = await rawDb.tenantUser.findMany({
       where: { userId: ctx.user.id, active: true },
       include: {
@@ -83,8 +102,8 @@ export const authRouter = createTRPCRouter({
     return {
       id: ctx.user.id,
       email: ctx.user.email,
-      name: ctx.user.user_metadata?.full_name || '',
-      tenants: tenantUsers.map((tu) => ({
+      name: ctx.user.name || ctx.supabaseUser.user_metadata?.full_name || '',
+      tenants: tenantUsers.map((tu: { tenant: { id: string; name: string; slug: string; logoUrl: string | null; plan: string }; role: string }) => ({
         tenantId: tu.tenant.id,
         name: tu.tenant.name,
         slug: tu.tenant.slug,
@@ -128,6 +147,13 @@ export const authRouter = createTRPCRouter({
   acceptInvite: protectedProcedure
     .input(z.object({ token: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
+      if (!ctx.user) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Registro de usuario incompleto. Tente fazer login novamente.',
+        })
+      }
+
       const tokenHash = createHash('sha256').update(input.token).digest('hex')
 
       const invite = await rawDb.inviteToken.findFirst({

@@ -38,3 +38,17 @@ export const portalCommentSchema = z.object({
 })
 
 export type PortalCommentInput = z.infer<typeof portalCommentSchema>
+
+// ═══════════════════════════════════════════════
+// PORTAL FILE UPLOAD
+// ═══════════════════════════════════════════════
+
+export const portalFileUploadSchema = z.object({
+  caseId: z.string().uuid(),
+  fileUrl: z.string().min(1),
+  fileType: z.string().max(20),
+  fileName: z.string().max(255),
+  fileSize: z.number().int().min(0).optional(),
+})
+
+export type PortalFileUploadInput = z.infer<typeof portalFileUploadSchema>

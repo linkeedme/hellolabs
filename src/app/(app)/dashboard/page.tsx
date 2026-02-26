@@ -9,7 +9,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { ArrowUpRight, AlertTriangle, Clock } from 'lucide-react'
+import { ArrowUpRight, AlertTriangle, Clock, Plus, Users, Kanban, Receipt, Package } from 'lucide-react'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import { trpc } from '@/lib/trpc/client'
@@ -76,8 +76,18 @@ function SectionHeader({
   )
 }
 
+// ── Quick Actions ───────────────────────────────────────────────────────
+const QUICK_ACTIONS = [
+  { label: 'Novo Caso', href: '/cases/new', icon: Plus, color: '#5e81f4' },
+  { label: 'Clientes', href: '/clients', icon: Users, color: '#7ce7ac' },
+  { label: 'Kanban', href: '/cases', icon: Kanban, color: '#f4be5e' },
+  { label: 'Financeiro', href: '/financial/orders', icon: Receipt, color: '#ff808b' },
+  { label: 'Estoque', href: '/inventory', icon: Package, color: '#8b5cf6' },
+]
+
 // ── Page ───────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
+  const { data: me } = trpc.auth.me.useQuery(undefined, { retry: false, staleTime: 5 * 60 * 1000 })
   const { data: stats, isLoading: statsLoading } = trpc.dashboard.stats.useQuery()
   const { data: monthlyData } = trpc.dashboard.monthlyCases.useQuery()
   const { data: recentCases } = trpc.dashboard.recentCases.useQuery()
@@ -88,8 +98,36 @@ export default function DashboardPage() {
   const totalCasesYear = chartData.reduce((sum, m) => sum + m.pedidos, 0)
   const totalRevenueYear = chartData.reduce((sum, m) => sum + m.faturamento, 0)
 
+  const firstName = me?.name?.split(' ')[0] || 'Usuario'
+
   return (
     <div className="space-y-6 min-h-full bg-[#f5f5fa] -m-6 p-6">
+      {/* ── Welcome + Quick Actions ─────────────────────── */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-[22px] font-bold text-[#1c1d21]">
+            Ola, {firstName}!
+          </h1>
+          <p className="text-[13px] text-[#8181a5]">
+            {me?.tenants?.[0]?.name ? `${me.tenants[0].name} — ` : ''}
+            Veja o resumo do seu laboratorio.
+          </p>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {QUICK_ACTIONS.map((action) => (
+            <Link
+              key={action.href}
+              href={action.href}
+              className="flex items-center gap-1.5 h-[34px] px-3 rounded-lg text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+              style={{ backgroundColor: action.color }}
+            >
+              <action.icon className="h-3.5 w-3.5" />
+              {action.label}
+            </Link>
+          ))}
+        </div>
+      </div>
+
       {/* ── Stat Cards ─────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard

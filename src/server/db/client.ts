@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
+import { Pool } from 'pg'
 import { AsyncLocalStorage } from 'async_hooks'
 
 // Tenant context via AsyncLocalStorage (thread-safe)
@@ -21,16 +22,30 @@ const SYSTEM_TABLES = new Set([
   'ProsthesisTemplateStage',
 ])
 
-function createAdapter() {
+// Global singletons — survive Turbopack hot-reloads in development
+const globalForPrisma = globalThis as unknown as {
+  pgPool: Pool | undefined
+  prisma: ReturnType<typeof createPrismaClient> | undefined
+  rawPrisma: PrismaClient | undefined
+}
+
+function getPool() {
+  if (globalForPrisma.pgPool) return globalForPrisma.pgPool
+
   const connectionString = process.env.DATABASE_URL
   if (!connectionString) {
     throw new Error('DATABASE_URL environment variable is not set.')
   }
-  return new PrismaPg({ connectionString })
+
+  const pool = new Pool({ connectionString })
+  if (process.env.NODE_ENV !== 'production') {
+    globalForPrisma.pgPool = pool
+  }
+  return pool
 }
 
 function createPrismaClient() {
-  const adapter = createAdapter()
+  const adapter = new PrismaPg(getPool())
   const client = new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
@@ -113,11 +128,6 @@ function createPrismaClient() {
   })
 }
 
-// Singleton pattern for development hot-reload
-const globalForPrisma = globalThis as unknown as {
-  prisma: ReturnType<typeof createPrismaClient> | undefined
-}
-
 export const db = globalForPrisma.prisma ?? createPrismaClient()
 
 if (process.env.NODE_ENV !== 'production') {
@@ -125,20 +135,16 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 // Raw prisma client without tenant middleware (for system operations like auth)
-const globalForRawPrisma = globalThis as unknown as {
-  rawPrisma: PrismaClient | undefined
-}
-
 function createRawPrismaClient() {
-  const adapter = createAdapter()
+  const adapter = new PrismaPg(getPool())
   return new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
   })
 }
 
-export const rawDb = globalForRawPrisma.rawPrisma ?? createRawPrismaClient()
+export const rawDb = globalForPrisma.rawPrisma ?? createRawPrismaClient()
 
 if (process.env.NODE_ENV !== 'production') {
-  globalForRawPrisma.rawPrisma = rawDb
+  globalForPrisma.rawPrisma = rawDb
 }

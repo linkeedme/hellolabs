@@ -29,6 +29,8 @@ import {
 import { StatusBadge, getCaseStatusBadge, getPriorityBadge } from '@/components/shared/status-badge'
 import { StageTimeline } from '@/components/cases/stage-timeline'
 import { CommentThread } from '@/components/cases/comment-thread'
+import { FileGallery, type FileItem } from '@/components/cases/file-gallery'
+import { FileUpload } from '@/components/cases/file-upload'
 import { trpc } from '@/lib/trpc/client'
 import { getProsthesisTypeById } from '@/lib/constants/prosthesis-types'
 import { formatDate, formatCurrency } from '@/lib/utils/format'
@@ -44,7 +46,9 @@ import {
   Calendar,
   Palette,
   Activity,
+  Tag,
 } from 'lucide-react'
+import { downloadCaseLabelPdf } from '@/components/shared/pdf-download-button'
 
 export default function CaseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -52,8 +56,14 @@ export default function CaseDetailPage({ params }: { params: Promise<{ id: strin
 
   const { data: caseData, isLoading } = trpc.case.getById.useQuery({ id })
   const { data: auditLog } = trpc.case.getAuditLog.useQuery({ caseId: id })
+  const { data: filesWithUrls } = trpc.case.getFileUrls.useQuery(
+    { caseId: id },
+    { enabled: !!caseData },
+  )
+  const { data: tenant } = trpc.tenant.getCurrent.useQuery()
 
   const [deliveryMethod, setDeliveryMethod] = useState('')
+  const [labelLoading, setLabelLoading] = useState(false)
 
   const utils = trpc.useUtils()
 
@@ -123,8 +133,44 @@ export default function CaseDetailPage({ params }: { params: Promise<{ id: strin
         </div>
 
         {/* Action buttons */}
-        {canManage && (
-          <div className="flex gap-2">
+        <div className="flex gap-2">
+          {/* Print Label */}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={labelLoading}
+            onClick={async () => {
+              if (!tenant) return
+              setLabelLoading(true)
+              try {
+                await downloadCaseLabelPdf(
+                  tenant.name,
+                  {
+                    caseNumber: caseData.caseNumber,
+                    patientName: caseData.patientName,
+                    clientName: caseData.client.name,
+                    prosthesisType: prosthesisType?.name ?? caseData.prosthesisType,
+                    shade: caseData.shade,
+                    teeth: caseData.teeth,
+                    slaDate: caseData.slaDate,
+                    priority: caseData.priority,
+                    modality: caseData.modality,
+                  },
+                  id,
+                )
+                toast.success('Etiqueta gerada!')
+              } catch {
+                toast.error('Erro ao gerar etiqueta.')
+              } finally {
+                setLabelLoading(false)
+              }
+            }}
+          >
+            {labelLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Tag className="mr-2 h-4 w-4" />}
+            Etiqueta
+          </Button>
+
+          {canManage && (<>
             {/* Deliver */}
             <Dialog>
               <DialogTrigger asChild>
@@ -191,8 +237,8 @@ export default function CaseDetailPage({ params }: { params: Promise<{ id: strin
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-          </div>
-        )}
+          </>)}
+        </div>
       </div>
 
       {/* Tabs */}
@@ -311,27 +357,24 @@ export default function CaseDetailPage({ params }: { params: Promise<{ id: strin
             <CardHeader>
               <CardTitle className="text-base">Arquivos</CardTitle>
             </CardHeader>
-            <CardContent>
-              {caseData.files.length === 0 ? (
-                <p className="py-4 text-center text-sm text-muted-foreground">
-                  Nenhum arquivo enviado ainda.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {caseData.files.map((file) => (
-                    <div key={file.id} className="flex items-center justify-between rounded border p-3">
-                      <div>
-                        <p className="text-sm font-medium">{file.fileName}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {file.fileType} — v{file.version}
-                          {file.fileSize && ` — ${(file.fileSize / 1024 / 1024).toFixed(1)} MB`}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {/* File upload will be added in Phase E */}
+            <CardContent className="space-y-4">
+              <FileUpload
+                caseId={id}
+                tenantId={caseData.tenantId ?? ''}
+                onUploadComplete={() => utils.case.getFileUrls.invalidate({ caseId: id })}
+              />
+              <FileGallery
+                files={(filesWithUrls ?? []).map((f): FileItem => ({
+                  id: f.id,
+                  fileName: f.fileName,
+                  fileType: f.fileType,
+                  fileSize: f.fileSize,
+                  version: f.version,
+                  createdAt: f.createdAt,
+                  uploadedBy: f.uploadedBy,
+                  signedUrl: f.signedUrl,
+                }))}
+              />
             </CardContent>
           </Card>
         </TabsContent>

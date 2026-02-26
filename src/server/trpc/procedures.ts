@@ -17,9 +17,11 @@ import type { Role } from '@prisma/client'
 // Procedure publica — sem autenticacao
 export const publicProcedure = baseProcedure
 
-// Procedure protegida — requer usuario autenticado
+// Procedure protegida — requer Supabase Auth
+// ctx.user = internal DB User (may be null during onboarding)
+// ctx.supabaseUser = Supabase Auth user (always present)
 export const protectedProcedure = baseProcedure.use(async ({ ctx, next }) => {
-  if (!ctx.user) {
+  if (!ctx.supabaseUser) {
     throw new TRPCError({
       code: 'UNAUTHORIZED',
       message: 'Voce precisa estar autenticado para acessar este recurso.',
@@ -29,14 +31,15 @@ export const protectedProcedure = baseProcedure.use(async ({ ctx, next }) => {
   return next({
     ctx: {
       ...ctx,
+      supabaseUser: ctx.supabaseUser,
       user: ctx.user,
     },
   })
 })
 
-// Procedure de tenant — requer auth + tenant ativo
+// Procedure de tenant — requer auth + tenant ativo + DB user
 export const tenantProcedure = protectedProcedure.use(async ({ ctx, next }) => {
-  if (!ctx.tenantId || !ctx.role) {
+  if (!ctx.tenantId || !ctx.role || !ctx.user) {
     throw new TRPCError({
       code: 'FORBIDDEN',
       message: 'Voce nao esta vinculado a nenhum laboratorio.',
@@ -48,6 +51,7 @@ export const tenantProcedure = protectedProcedure.use(async ({ ctx, next }) => {
     next({
       ctx: {
         ...ctx,
+        user: ctx.user!,
         tenantId: ctx.tenantId!,
         role: ctx.role as Role,
       },

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { format } from 'date-fns'
 import {
   ArrowLeft,
@@ -11,25 +11,32 @@ import {
   FileText,
   Calendar,
   User,
+  Upload,
 } from 'lucide-react'
 import Link from 'next/link'
 import { trpc } from '@/lib/trpc/client'
 import { StatusBadge, getCaseStatusBadge, getPriorityBadge } from '@/components/shared/status-badge'
 import { CaseTimeline } from '@/components/portal/case-timeline'
+import { PortalFileUpload } from '@/components/portal/portal-file-upload'
+import { FileGallery, type FileItem } from '@/components/cases/file-gallery'
 
 export default function PortalCaseDetailPage() {
   const params = useParams()
-  const router = useRouter()
   const slug = params.slug as string
   const caseId = params.id as string
 
   const [commentText, setCommentText] = useState('')
   const [rejectNotes, setRejectNotes] = useState('')
   const [showRejectDialog, setShowRejectDialog] = useState(false)
+  const [showUpload, setShowUpload] = useState(false)
 
   const utils = trpc.useUtils()
 
   const { data: caseData, isLoading } = trpc.portal.caseDetail.useQuery({ caseId })
+  const { data: filesWithUrls } = trpc.portal.getFileUrls.useQuery(
+    { caseId },
+    { enabled: !!caseData },
+  )
 
   const approveMutation = trpc.portal.approve.useMutation({
     onSuccess: () => {
@@ -71,6 +78,20 @@ export default function PortalCaseDetailPage() {
   const priorityBadge = getPriorityBadge(caseData.priority)
   const isWaitingApproval = caseData.status === 'WAITING_APPROVAL'
 
+  // Map files with signed URLs
+  const fileItems: FileItem[] = (filesWithUrls ?? []).map((f) => ({
+    id: f.id,
+    fileName: f.fileName,
+    fileType: f.fileType,
+    fileSize: f.fileSize,
+    version: f.version,
+    createdAt: f.createdAt,
+    uploadedBy: f.uploadedBy,
+    signedUrl: f.signedUrl,
+  }))
+
+  const tenantId = caseData.tenantId
+
   return (
     <div className="space-y-6">
       {/* ── Back + Header ─────────────────────────── */}
@@ -100,7 +121,7 @@ export default function PortalCaseDetailPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* ── Left: Case Info + Comments ───────────── */}
+        {/* ── Left: Case Info + Files + Comments ───────────── */}
         <div className="lg:col-span-2 space-y-5">
           {/* Case Info */}
           <div className="bg-white rounded-xl border border-[#f0f0f3] p-5">
@@ -218,26 +239,36 @@ export default function PortalCaseDetailPage() {
             </div>
           )}
 
-          {/* Files */}
-          {caseData.files.length > 0 && (
-            <div className="bg-white rounded-xl border border-[#f0f0f3] p-5">
-              <h2 className="text-[15px] font-bold text-[#1c1d21] mb-3">Arquivos</h2>
-              <div className="space-y-2">
-                {caseData.files.map((f: { id: string; fileName: string; fileType: string; fileUrl: string; createdAt: Date }) => (
-                  <div
-                    key={f.id}
-                    className="flex items-center justify-between text-[13px] p-2 rounded-lg bg-[#f5f5fa]"
-                  >
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-[#5e81f4]" />
-                      <span className="text-[#1c1d21] font-medium">{f.fileName}</span>
-                    </div>
-                    <span className="text-[#8181a5]">{f.fileType}</span>
-                  </div>
-                ))}
-              </div>
+          {/* Files Section */}
+          <div className="bg-white rounded-xl border border-[#f0f0f3] p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-[15px] font-bold text-[#1c1d21]">
+                Arquivos ({fileItems.length})
+              </h2>
+              <button
+                onClick={() => setShowUpload(!showUpload)}
+                className="h-8 px-3 rounded-lg bg-[#5e81f4] text-white text-[12px] font-bold hover:bg-[#4d70e0] transition-colors flex items-center gap-1.5"
+              >
+                <Upload className="h-3.5 w-3.5" />
+                Enviar arquivo
+              </button>
             </div>
-          )}
+
+            {showUpload && (
+              <div className="mb-4">
+                <PortalFileUpload
+                  caseId={caseId}
+                  tenantId={tenantId}
+                  onUploadComplete={() => {
+                    setShowUpload(false)
+                    utils.portal.getFileUrls.invalidate({ caseId })
+                  }}
+                />
+              </div>
+            )}
+
+            <FileGallery files={fileItems} />
+          </div>
 
           {/* Comments */}
           <div className="bg-white rounded-xl border border-[#f0f0f3] p-5">
@@ -332,6 +363,10 @@ export default function PortalCaseDetailPage() {
               <span className="font-medium text-[#1c1d21]">
                 {caseData.stages.filter((s: { status: string }) => s.status === 'COMPLETED').length} / {caseData.stages.length}
               </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[#8181a5]">Arquivos</span>
+              <span className="font-medium text-[#1c1d21]">{fileItems.length}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-[#8181a5]">Comentarios</span>

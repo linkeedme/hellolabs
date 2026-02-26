@@ -11,8 +11,11 @@ import {
   portalCaseListSchema,
   portalApproveSchema,
   portalCommentSchema,
+  portalFileUploadSchema,
 } from '@/lib/validators/portal'
 import { z } from 'zod'
+import { getSignedUrl, getSignedUrls } from '@/lib/storage/signed-url'
+import { createNotificationsForTenantUsers } from '../helpers/create-notification'
 
 /** Helper: get the Client linked to the current dentist user */
 async function getDentistClient(tenantId: string, userId: string) {
@@ -135,6 +138,7 @@ export const portalRouter = createTRPCRouter({
 
       return {
         id: caseData.id,
+        tenantId: caseData.tenantId,
         caseNumber: caseData.caseNumber,
         patientName: caseData.patientName,
         patientDob: caseData.patientDob,
@@ -262,5 +266,129 @@ export const portalRouter = createTRPCRouter({
         content: comment.content,
         createdAt: comment.createdAt,
       }
+    }),
+
+  // ── Upload file (dentist uploads STL/photos/documents) ─────────
+  uploadFile: dentistProcedure
+    .input(portalFileUploadSchema)
+    .mutation(async ({ ctx, input }) => {
+      const client = await getDentistClient(ctx.tenantId, ctx.user.id)
+
+      const caseData = await rawDb.case.findFirst({
+        where: {
+          id: input.caseId,
+          tenantId: ctx.tenantId,
+          clientId: client.id,
+        },
+        select: { id: true, caseNumber: true },
+      })
+
+      if (!caseData) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Caso nao encontrado.',
+        })
+      }
+
+      // Get next version number for this file type
+      const lastFile = await rawDb.caseFile.findFirst({
+        where: { caseId: input.caseId, fileType: input.fileType },
+        orderBy: { version: 'desc' },
+        select: { version: true },
+      })
+
+      const file = await rawDb.caseFile.create({
+        data: {
+          caseId: input.caseId,
+          uploadedBy: ctx.user.id,
+          fileUrl: input.fileUrl,
+          fileType: input.fileType,
+          fileName: input.fileName,
+          fileSize: input.fileSize ?? null,
+          version: (lastFile?.version ?? 0) + 1,
+        },
+      })
+
+      // Notify lab team about new file from dentist
+      await createNotificationsForTenantUsers(rawDb, {
+        tenantId: ctx.tenantId,
+        type: 'CASE_FILE',
+        title: `Novo arquivo de ${client.name}`,
+        message: `${input.fileName} enviado para o caso #${caseData.caseNumber}.`,
+        refId: caseData.id,
+        refType: 'CASE',
+        excludeUserId: ctx.user.id,
+      })
+
+      return { id: file.id, version: file.version }
+    }),
+
+  // ── Get signed URL for a file ──────────────────────────────────
+  getFileUrl: dentistProcedure
+    .input(z.object({ fileId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const client = await getDentistClient(ctx.tenantId, ctx.user.id)
+
+      const file = await rawDb.caseFile.findFirst({
+        where: { id: input.fileId },
+        include: { case: { select: { tenantId: true, clientId: true } } },
+      })
+
+      if (!file || file.case.tenantId !== ctx.tenantId || file.case.clientId !== client.id) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Arquivo nao encontrado.' })
+      }
+
+      const signedUrl = await getSignedUrl(file.fileUrl)
+      return { signedUrl, fileName: file.fileName, fileType: file.fileType }
+    }),
+
+  // ── Get all file signed URLs for a case ────────────────────────
+  getFileUrls: dentistProcedure
+    .input(z.object({ caseId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const client = await getDentistClient(ctx.tenantId, ctx.user.id)
+
+      const caseData = await rawDb.case.findFirst({
+        where: {
+          id: input.caseId,
+          tenantId: ctx.tenantId,
+          clientId: client.id,
+        },
+        select: { id: true },
+      })
+
+      if (!caseData) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Caso nao encontrado.' })
+      }
+
+      const files = await rawDb.caseFile.findMany({
+        where: { caseId: input.caseId },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          fileName: true,
+          fileType: true,
+          fileUrl: true,
+          fileSize: true,
+          version: true,
+          createdAt: true,
+          uploader: { select: { id: true, name: true } },
+        },
+      })
+
+      if (files.length === 0) return []
+
+      const urlMap = await getSignedUrls(files.map((f) => f.fileUrl))
+
+      return files.map((f) => ({
+        id: f.id,
+        fileName: f.fileName,
+        fileType: f.fileType,
+        fileSize: f.fileSize,
+        version: f.version,
+        createdAt: f.createdAt,
+        uploadedBy: f.uploader?.name ?? 'Desconhecido',
+        signedUrl: urlMap.get(f.fileUrl) ?? null,
+      }))
     }),
 })

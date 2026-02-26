@@ -6,7 +6,7 @@ import { trpc } from '@/lib/trpc/client'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Upload, Loader2, X } from 'lucide-react'
+import { Upload, Loader2, Box, Image as ImageIcon, FileText, Archive } from 'lucide-react'
 
 const ALLOWED_TYPES = ['.stl', '.obj', '.zip', '.pdf', '.jpg', '.jpeg', '.png']
 const MAX_SIZE = 100 * 1024 * 1024 // 100MB
@@ -17,15 +17,36 @@ interface FileUploadProps {
   onUploadComplete?: () => void
 }
 
+function getFileTypeCategory(ext: string): string {
+  if (['.stl', '.obj'].includes(ext)) return 'model'
+  if (['.jpg', '.jpeg', '.png'].includes(ext)) return 'image'
+  if (ext === '.pdf') return 'document'
+  if (ext === '.zip') return 'archive'
+  return 'other'
+}
+
+function getFileIcon(ext: string) {
+  const type = getFileTypeCategory(ext)
+  switch (type) {
+    case 'model': return <Box className="h-4 w-4 text-blue-500" />
+    case 'image': return <ImageIcon className="h-4 w-4 text-emerald-500" />
+    case 'document': return <FileText className="h-4 w-4 text-orange-500" />
+    case 'archive': return <Archive className="h-4 w-4 text-purple-500" />
+    default: return <FileText className="h-4 w-4 text-muted-foreground" />
+  }
+}
+
 export function FileUpload({ caseId, tenantId, onUploadComplete }: FileUploadProps) {
   const [isDragOver, setIsDragOver] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [currentFile, setCurrentFile] = useState<string>('')
 
   const utils = trpc.useUtils()
   const uploadFileMeta = trpc.case.uploadFile.useMutation({
     onSuccess: () => {
       utils.case.getById.invalidate({ id: caseId })
+      utils.case.getFileUrls.invalidate({ caseId })
       onUploadComplete?.()
     },
   })
@@ -50,6 +71,7 @@ export function FileUpload({ caseId, tenantId, onUploadComplete }: FileUploadPro
 
       setUploading(true)
       setProgress(0)
+      setCurrentFile(file.name)
 
       try {
         const supabase = createClient()
@@ -93,6 +115,7 @@ export function FileUpload({ caseId, tenantId, onUploadComplete }: FileUploadPro
 
     setUploading(false)
     setProgress(0)
+    setCurrentFile('')
   }, [caseId, tenantId, uploadFileMeta, utils])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -132,7 +155,9 @@ export function FileUpload({ caseId, tenantId, onUploadComplete }: FileUploadPro
         {uploading ? (
           <div className="flex flex-col items-center gap-2">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">Enviando... {progress}%</p>
+            <p className="text-sm text-muted-foreground">
+              Enviando {currentFile}... {progress}%
+            </p>
             <div className="h-2 w-48 rounded-full bg-muted">
               <div
                 className="h-2 rounded-full bg-primary transition-all"
@@ -144,9 +169,12 @@ export function FileUpload({ caseId, tenantId, onUploadComplete }: FileUploadPro
           <>
             <Upload className="mb-2 h-8 w-8 text-muted-foreground" />
             <p className="text-sm font-medium">Arraste arquivos aqui</p>
-            <p className="text-xs text-muted-foreground">
-              {ALLOWED_TYPES.join(', ')} — ate 100MB
-            </p>
+            <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1"><Box className="h-3 w-3 text-blue-500" /> STL/OBJ</span>
+              <span className="flex items-center gap-1"><ImageIcon className="h-3 w-3 text-emerald-500" /> Fotos</span>
+              <span className="flex items-center gap-1"><FileText className="h-3 w-3 text-orange-500" /> PDF</span>
+              <span>— ate 100MB</span>
+            </div>
             <label>
               <Button variant="outline" size="sm" className="mt-3" asChild>
                 <span>Selecionar arquivo</span>
@@ -164,12 +192,4 @@ export function FileUpload({ caseId, tenantId, onUploadComplete }: FileUploadPro
       </div>
     </div>
   )
-}
-
-function getFileTypeCategory(ext: string): string {
-  if (['.stl', '.obj'].includes(ext)) return 'model'
-  if (['.jpg', '.jpeg', '.png'].includes(ext)) return 'image'
-  if (ext === '.pdf') return 'document'
-  if (ext === '.zip') return 'archive'
-  return 'other'
 }

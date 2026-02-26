@@ -14,36 +14,52 @@ import { rawDb } from '@/server/db/client'
 export async function createTRPCContext(opts: { headers: Headers }) {
   const supabase = await createClient()
   const {
-    data: { user },
+    data: { user: supabaseUser },
   } = await supabase.auth.getUser()
 
   let tenantId: string | null = null
   let role: string | null = null
+  let dbUser: { id: string; email: string; name: string } | null = null
 
-  if (user) {
-    // Busca tenant ativo do usuario
-    const tenantUser = await rawDb.tenantUser.findFirst({
-      where: {
-        userId: user.id,
-        active: true,
-      },
-      select: {
-        tenantId: true,
-        role: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    })
+  if (supabaseUser) {
+    // Look up internal User by supabaseId
+    try {
+      const user = await rawDb.user.findUnique({
+        where: { supabaseId: supabaseUser.id },
+        select: { id: true, email: true, name: true },
+      })
 
-    if (tenantUser) {
-      tenantId = tenantUser.tenantId
-      role = tenantUser.role
+      if (user) {
+        dbUser = user
+
+        // Find active tenant for this user
+        const tenantUser = await rawDb.tenantUser.findFirst({
+          where: {
+            userId: user.id,
+            active: true,
+          },
+          select: {
+            tenantId: true,
+            role: true,
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+        })
+
+        if (tenantUser) {
+          tenantId = tenantUser.tenantId
+          role = tenantUser.role
+        }
+      }
+    } catch {
+      // User exists in Supabase but DB record not found yet (onboarding) — continue
     }
   }
 
   return {
-    user,
+    supabaseUser,
+    user: dbUser,
     tenantId,
     role,
     headers: opts.headers,

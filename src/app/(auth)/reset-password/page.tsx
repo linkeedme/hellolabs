@@ -54,13 +54,13 @@ export default function ResetPasswordPage() {
     const confirm = formData.get('confirm') as string
 
     if (password !== confirm) {
-      toast.error('Passwords do not match.')
+      toast.error('As senhas nao coincidem.')
       setLoading(false)
       return
     }
 
     if (password.length < 8) {
-      toast.error('Password must be at least 8 characters.')
+      toast.error('A senha deve ter no minimo 8 caracteres.')
       setLoading(false)
       return
     }
@@ -69,45 +69,39 @@ export default function ResetPasswordPage() {
     const { error } = await supabase.auth.updateUser({ password })
 
     if (error) {
-      toast.error('Failed to reset password', { description: error.message })
+      toast.error('Erro ao redefinir senha', { description: error.message })
       setLoading(false)
       return
     }
 
-    toast.success('Password updated!', {
-      description: 'You can now sign in with your new password.',
+    toast.success('Senha atualizada!', {
+      description: 'Voce ja pode entrar com a nova senha.',
     })
     router.push('/login')
   }
 
   return (
-    <AuthPanel>
-      <div className="mb-8">
-        <h1 className="text-[32px] font-bold leading-[42px] text-[#1C1D21]">
-          Set a new password.
-        </h1>
-        <p className="mt-2 text-[14px] text-[#8181A5]">
-          Choose a strong password for your account
-        </p>
-      </div>
-
+    <AuthPanel
+      title="Defina sua nova senha"
+      subtitle="Escolha uma senha forte para sua conta."
+    >
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-5">
           <FieldInput
-            label="New password"
+            label="Nova senha"
             id="password"
             name="password"
             type="password"
-            placeholder="At least 8 characters"
+            placeholder="Minimo 8 caracteres"
             required
             autoComplete="new-password"
           />
           <FieldInput
-            label="Confirm password"
+            label="Confirmar senha"
             id="confirm"
             name="confirm"
             type="password"
-            placeholder="Repeat your password"
+            placeholder="Repita a senha"
             required
             autoComplete="new-password"
           />
@@ -118,7 +112,7 @@ export default function ResetPasswordPage() {
           disabled={loading}
           className="w-full h-[46px] bg-[#5E81F4] text-white text-[14px] font-semibold rounded-lg hover:bg-[#4A6FE3] transition-colors disabled:opacity-60"
         >
-          {loading ? 'Saving…' : 'Update password'}
+          {loading ? 'Salvando...' : 'Atualizar senha'}
         </button>
       </form>
     </AuthPanel>

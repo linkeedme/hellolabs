@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Plus, FileText, MoreHorizontal, Send, X, CreditCard, Loader2 } from 'lucide-react'
+import { Plus, FileText, MoreHorizontal, Send, X, CreditCard, Loader2, Download } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -35,6 +35,7 @@ import { FinancialTabs } from '@/components/financial/financial-tabs'
 import { InvoiceFormDialog } from '@/components/financial/invoice-form-dialog'
 import { PaymentFormDialog } from '@/components/financial/payment-form-dialog'
 import { OverdueList } from '@/components/financial/overdue-list'
+import { PdfDownloadButton } from '@/components/shared/pdf-download-button'
 import { trpc } from '@/lib/trpc/client'
 import { formatMoney, formatDate } from '@/lib/utils/format'
 import { useDebounce } from '@/lib/hooks/use-debounce'
@@ -200,6 +201,9 @@ export default function InvoicesPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem asChild>
+                            <PdfDownloadButton type="invoice" id={inv.id} label="Baixar PDF" variant="ghost" size="sm" className="w-full justify-start px-2 py-1.5 h-auto font-normal" />
+                          </DropdownMenuItem>
                           {inv.status === 'DRAFT' && (
                             <DropdownMenuItem
                               onClick={() => sendMutation.mutate({ id: inv.id })}

@@ -21,6 +21,7 @@ import {
   cancelSchema,
 } from '@/lib/validators/case'
 import { getProsthesisTypeById } from '@/lib/constants/prosthesis-types'
+import { getSignedUrl, getSignedUrls } from '@/lib/storage/signed-url'
 
 // Helper: create audit log entry
 async function createAuditLog(
@@ -555,6 +556,67 @@ export const caseRouter = createTRPCRouter({
       })
 
       return updated
+    }),
+
+  // ═══ GET FILE SIGNED URL ═══
+  getFileUrl: tenantProcedure
+    .input(z.object({ fileId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const file = await rawDb.caseFile.findFirst({
+        where: { id: input.fileId },
+        include: { case: { select: { tenantId: true } } },
+      })
+
+      if (!file || file.case.tenantId !== ctx.tenantId) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Arquivo nao encontrado.' })
+      }
+
+      const signedUrl = await getSignedUrl(file.fileUrl)
+      return { signedUrl, fileName: file.fileName, fileType: file.fileType }
+    }),
+
+  // ═══ GET ALL FILE SIGNED URLS FOR A CASE ═══
+  getFileUrls: tenantProcedure
+    .input(z.object({ caseId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const caseData = await rawDb.case.findFirst({
+        where: { id: input.caseId, tenantId: ctx.tenantId },
+        select: { id: true },
+      })
+
+      if (!caseData) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Caso nao encontrado.' })
+      }
+
+      const files = await rawDb.caseFile.findMany({
+        where: { caseId: input.caseId },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          fileName: true,
+          fileType: true,
+          fileUrl: true,
+          fileSize: true,
+          version: true,
+          createdAt: true,
+          uploader: { select: { id: true, name: true } },
+        },
+      })
+
+      if (files.length === 0) return []
+
+      const urlMap = await getSignedUrls(files.map((f) => f.fileUrl))
+
+      return files.map((f) => ({
+        id: f.id,
+        fileName: f.fileName,
+        fileType: f.fileType,
+        fileSize: f.fileSize,
+        version: f.version,
+        createdAt: f.createdAt,
+        uploadedBy: f.uploader?.name ?? 'Desconhecido',
+        signedUrl: urlMap.get(f.fileUrl) ?? null,
+      }))
     }),
 
   // ═══ GET AUDIT LOG ═══
